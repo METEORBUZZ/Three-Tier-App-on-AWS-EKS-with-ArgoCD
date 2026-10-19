@@ -1,0 +1,23 @@
+# ==============================================================================
+# POD DISRUPTION BUDGET (PDB) - BACKEND (CKA CLUSTER UPGRADE PATTERN)
+# ==============================================================================
+# [CKA BEST PRACTICE] High Availability During Maintenance:
+# When administrators run 'kubectl drain' for node upgrades or kernel patches,
+# this PDB ensures that at least 1 backend replica is ALWAYS running and serving
+# traffic, preventing outages.
+# ==============================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: todo-backend-pdb
+  namespace: todo-app
+  labels:
+    app: todo-backend
+    app.kubernetes.io/name: todo-backend-pdb
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: todo-app
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: todo-backend

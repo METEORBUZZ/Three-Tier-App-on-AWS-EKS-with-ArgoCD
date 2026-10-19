@@ -1,0 +1,14 @@
+# ==============================================================================
+# PROD ENVIRONMENT: EXAMPLE VARIABLE VALUES
+# ==============================================================================
+
+aws_region          = "us-east-1"
+environment         = "prod"
+cluster_name        = "todo-prod-eks-cluster"
+kubernetes_version  = "1.29"
+vpc_cidr            = "10.30.0.0/16"
+single_nat_gateway  = false
+node_instance_types = ["t3.large"]
+desired_node_count  = 3
+min_node_count      = 2
+max_node_count      = 5

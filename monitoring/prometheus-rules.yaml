@@ -1,0 +1,47 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: todo-backend-alerts
+  namespace: todo-app
+  labels:
+    release: prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: todo-backend-alerts
+      rules:
+        # Alert if backend pod is down
+        - alert: BackendServiceDown
+          expr: up{job="todo-backend"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "To-Do Backend instance is down"
+            description: "Backend pod {{ $labels.instance }} has been unreachable for more than 1 minute."
+
+        # Alert if 5xx error rate exceeds 5%
+        - alert: HighHttp5xxErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{status_code=~"5.."}[5m]))
+              /
+              sum(rate(http_requests_total[5m]))
+            ) * 100 > 5
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High HTTP 5xx error rate detected"
+            description: "HTTP 5xx error rate is {{ $value | printf \"%.2f\" }}% over the last 5 minutes."
+
+        # Alert if P95 latency exceeds 1 second
+        - alert: HighRequestLatency
+          expr: |
+            histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 1.0
+          for: 3m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High P95 latency detected"
+            description: "95th percentile HTTP latency is above 1.0 second (current: {{ $value | printf \"%.2f\" }}s)."

@@ -1,0 +1,55 @@
+# Helm values for kube-prometheus-stack
+# Install: helm install prometheus prometheus-community/kube-prometheus-stack -f monitoring/prometheus-values.yaml -n monitoring --create-namespace
+
+prometheus:
+  prometheusSpec:
+    # Discover ServiceMonitors across all namespaces (e.g. todo-app)
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorNamespaceSelector: {}
+    ruleSelectorNilUsesHelmValues: false
+    ruleNamespaceSelector: {}
+
+    scrapeInterval: 15s
+    evaluationInterval: 15s
+
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+
+grafana:
+  enabled: true
+  adminPassword: "admin"
+  defaultDashboardsEnabled: true
+
+  ingress:
+    enabled: false
+    # ingressClassName: nginx
+    # hosts:
+    #   - grafana.yourdomain.com
+
+  persistence:
+    enabled: true
+    size: 5Gi
+
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi

@@ -1,0 +1,48 @@
+# ==============================================================================
+# KUSTOMIZE ROOT (CKA / CKAD DECLARATIVE GITOPS CONFIGURATION)
+# ==============================================================================
+# Aggregates and overlays all Kubernetes resources for the todo-app workload.
+# Enables deterministic dry-run validation via: kubectl kustomize k8s-manifests/
+# ==============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: todo-app
+
+resources:
+  # 1. Namespace & Pod Security Admission
+  - namespace.yaml
+
+  # 2. Network Policies (Zero-Trust Network Isolation)
+  - networkpolicies/default-deny.yaml
+  - networkpolicies/frontend-netpol.yaml
+  - networkpolicies/backend-netpol.yaml
+  - networkpolicies/mongodb-netpol.yaml
+
+  # 3. Database Layer (MongoDB)
+  - mongodb/pvc.yaml
+  - mongodb/deployment.yaml
+  - mongodb/service.yaml
+
+  # 4. Backend Application Layer (Node.js API)
+  - backend/configmap.yaml
+  - backend/secret.yaml
+  - backend/deployment.yaml
+  - backend/service.yaml
+  - backend/hpa.yaml
+  - backend/pdb.yaml
+
+  # 5. Frontend Application Layer (React + Nginx)
+  - frontend/deployment.yaml
+  - frontend/service.yaml
+  - frontend/hpa.yaml
+  - frontend/pdb.yaml
+
+  # 6. Ingress Routing Layer
+  - ingress.yaml
+
+# Common Labels applied across all managed resources (Kustomize v5 standard)
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: todo-app
+      app.kubernetes.io/managed-by: gitops

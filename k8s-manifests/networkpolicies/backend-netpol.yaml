@@ -1,0 +1,50 @@
+# ==============================================================================
+# NETWORK POLICY: BACKEND INGRESS & EGRESS ALLOW (CKA NETWORKING DOMAIN)
+# ==============================================================================
+# - Allows ingress on port 5000 only from frontend pods and Ingress Controller.
+# - Allows egress to MongoDB (port 27017) and CoreDNS (port 53).
+# ==============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-network-policy
+  namespace: todo-app
+  labels:
+    app.kubernetes.io/name: backend-network-policy
+    app.kubernetes.io/part-of: todo-app
+spec:
+  podSelector:
+    matchLabels:
+      app: todo-backend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # 1. Allow traffic from Frontend pods
+    - from:
+        - podSelector:
+            matchLabels:
+              app: todo-frontend
+      ports:
+        - protocol: TCP
+          port: 5000
+    # 2. Allow traffic from Ingress Controller / Prometheus scraper
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 5000
+  egress:
+    # Allow DNS resolution
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow egress to MongoDB database on port 27017
+    - to:
+        - podSelector:
+            matchLabels:
+              app: mongodb
+      ports:
+        - protocol: TCP
+          port: 27017

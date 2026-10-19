@@ -69,13 +69,15 @@ todo-app/
 │   │   ├── stage/
 │   │   └── prod/
 │   └── README.md
-├── k8s-manifests/               # Kubernetes Manifests (Kustomize ready)
-│   ├── namespace.yaml           # todo-app namespace
-│   ├── kustomization.yaml       # Kustomize root
-│   ├── ingress.yaml             # Nginx / AWS ALB ingress configuration
-│   ├── mongodb/                 # PVC, Deployment, Service
-│   ├── backend/                 # ConfigMap, Secret, Deployment, Service
-│   └── frontend/                # Deployment, Service
+├── k8s-manifests/               # Kubernetes Manifests (CKA & Production Grade)
+│   ├── namespace.yaml           # Namespace with Pod Security Standards (PSA)
+│   ├── kustomization.yaml       # Kustomize v5 root overlay
+│   ├── ingress.yaml             # Ingress with IngressClassName & path routing
+│   ├── networkpolicies/         # Zero-Trust NetworkPolicies (Default Deny, Backend, Frontend, Mongo)
+│   ├── mongodb/                 # PVC, Recreate Deployment, Service
+│   ├── backend/                 # ConfigMap, Secret, Deployment, Service, HPA, PDB
+│   ├── frontend/                # Deployment, Service, HPA, PDB
+│   └── README.md                # CKA architecture & best practices guide
 ├── jenkins/                     # CI/CD Automation
 │   ├── Jenkinsfile              # Declarative CI/CD pipeline
 │   └── README.md                # Jenkins setup instructions

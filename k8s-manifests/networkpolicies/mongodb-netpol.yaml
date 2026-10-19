@@ -1,0 +1,31 @@
+# ==============================================================================
+# NETWORK POLICY: MONGODB DATABASE ISOLATION (CKA SECURITY DOMAIN)
+# ==============================================================================
+# [CKA BEST PRACTICE] Strict Database Defense in Depth:
+# MongoDB must ONLY accept TCP connections on port 27017 originating from
+# backend pods (app: todo-backend). All other pods (including frontend and
+# unauthorized pods) are strictly blocked by the Kubernetes CNI.
+# ==============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mongodb-network-policy
+  namespace: todo-app
+  labels:
+    app.kubernetes.io/name: mongodb-network-policy
+    app.kubernetes.io/part-of: todo-app
+spec:
+  podSelector:
+    matchLabels:
+      app: mongodb
+  policyTypes:
+    - Ingress
+  ingress:
+    # Only allow incoming database connections from the backend application
+    - from:
+        - podSelector:
+            matchLabels:
+              app: todo-backend
+      ports:
+        - protocol: TCP
+          port: 27017

@@ -1,0 +1,149 @@
+pipeline {
+    agent any
+
+    environment {
+        // Registry & Image Configuration
+        DOCKER_REGISTRY      = 'docker.io'
+        DOCKER_HUB_USER      = 'myusername'
+        BACKEND_IMAGE_NAME   = "${DOCKER_HUB_USER}/todo-backend"
+        FRONTEND_IMAGE_NAME  = "${DOCKER_HUB_USER}/todo-frontend"
+        IMAGE_TAG            = "${BUILD_NUMBER}-${GIT_COMMIT.take(7)}"
+
+        // Credentials IDs configured in Jenkins Credentials Manager
+        DOCKER_CREDENTIALS_ID = 'docker-hub-credentials'
+        AWS_CREDENTIALS_ID    = 'aws-eks-credentials'
+        AWS_REGION            = 'us-east-1'
+        EKS_CLUSTER_NAME      = 'todo-eks-cluster'
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '15'))
+        timeout(time: 30, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        ansiColor('xterm')
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                echo 'Checking out source code repository...'
+                checkout scm
+            }
+        }
+
+        stage('Backend CI (Lint & Test)') {
+            steps {
+                dir('backend') {
+                    echo 'Running Backend dependencies installation, linting, and tests...'
+                    sh 'npm ci'
+                    sh 'npm run lint'
+                    sh 'npm test'
+                }
+            }
+        }
+
+        stage('Frontend CI (Lint & Build)') {
+            steps {
+                dir('frontend') {
+                    echo 'Running Frontend linting and production bundle build...'
+                    sh 'npm ci'
+                    sh 'npm run lint'
+                    sh 'npm run build'
+                }
+            }
+        }
+
+        stage('Security & Vulnerability Scan') {
+            steps {
+                echo 'Scanning codebase and dependencies for vulnerabilities...'
+                // Run Trivy filesystem scanner if installed
+                sh '''
+                    if command -v trivy >/dev/null 2>&1; then
+                        trivy fs --severity HIGH,CRITICAL --exit-code 0 .
+                    else
+                        echo "Trivy not found on agent, skipping filesystem scan."
+                    fi
+                '''
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                echo "Building Backend & Frontend Docker images with tag: ${IMAGE_TAG}"
+                sh """
+                    docker build -t ${BACKEND_IMAGE_NAME}:${IMAGE_TAG} -t ${BACKEND_IMAGE_NAME}:latest ./backend
+                    docker build --build-arg VITE_API_URL=/api/tasks -t ${FRONTEND_IMAGE_NAME}:${IMAGE_TAG} -t ${FRONTEND_IMAGE_NAME}:latest ./frontend
+                """
+            }
+        }
+
+        stage('Scan Docker Images') {
+            steps {
+                echo "Scanning Docker images for OS and package vulnerabilities..."
+                sh """
+                    if command -v trivy >/dev/null 2>&1; then
+                        trivy image --severity HIGH,CRITICAL --exit-code 0 ${BACKEND_IMAGE_NAME}:${IMAGE_TAG}
+                        trivy image --severity HIGH,CRITICAL --exit-code 0 ${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}
+                    fi
+                """
+            }
+        }
+
+        stage('Push Docker Images') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: env.DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh """
+                        echo "\$DOCKER_PASS" | docker login -u "\$DOCKER_USER" --password-stdin ${DOCKER_REGISTRY}
+                        docker push ${BACKEND_IMAGE_NAME}:${IMAGE_TAG}
+                        docker push ${BACKEND_IMAGE_NAME}:latest
+                        docker push ${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}
+                        docker push ${FRONTEND_IMAGE_NAME}:latest
+                    """
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes (EKS)') {
+            when {
+                branch 'main'
+            }
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: env.AWS_CREDENTIALS_ID,
+                    accessKeyVariable: 'AWS_ACCESS_KEY_ID',
+                    secretKeyVariable: 'AWS_SECRET_ACCESS_KEY'
+                ]]) {
+                    echo "Updating kubeconfig and deploying to EKS cluster: ${EKS_CLUSTER_NAME}..."
+                    sh """
+                        aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
+
+                        # Update deployment images to the newly built tags
+                        kubectl set image deployment/todo-backend backend=${BACKEND_IMAGE_NAME}:${IMAGE_TAG} -n todo-app --record || true
+                        kubectl set image deployment/todo-frontend frontend=${FRONTEND_IMAGE_NAME}:${IMAGE_TAG} -n todo-app --record || true
+
+                        # Apply all manifests via Kustomize
+                        kubectl apply -k k8s-manifests/
+
+                        # Verify zero-downtime rolling update status
+                        kubectl rollout status deployment/todo-backend -n todo-app --timeout=120s
+                        kubectl rollout status deployment/todo-frontend -n todo-app --timeout=120s
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline execution completed. Cleaning workspace...'
+            cleanWs()
+        }
+        success {
+            echo "CI/CD Pipeline Succeeded! Deployed version: ${IMAGE_TAG}"
+        }
+        failure {
+            echo "CI/CD Pipeline Failed! Check console log for details."
+        }
+    }
+}

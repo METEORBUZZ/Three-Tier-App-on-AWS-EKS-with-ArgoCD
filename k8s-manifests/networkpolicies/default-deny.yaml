@@ -1,0 +1,20 @@
+# ==============================================================================
+# NETWORK POLICY: DEFAULT DENY ALL INGRESS (CKA SECURITY DOMAIN)
+# ==============================================================================
+# [CKA BEST PRACTICE] Zero-Trust Isolation:
+# By default in Kubernetes, all pods can talk to all pods.
+# This policy locks down the namespace so all incoming traffic is blocked
+# unless explicitly whitelisted by another NetworkPolicy.
+# ==============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: todo-app
+  labels:
+    app.kubernetes.io/name: default-deny-ingress
+    app.kubernetes.io/part-of: todo-app
+spec:
+  podSelector: {} # Empty selector matches ALL pods in the namespace
+  policyTypes:
+    - Ingress

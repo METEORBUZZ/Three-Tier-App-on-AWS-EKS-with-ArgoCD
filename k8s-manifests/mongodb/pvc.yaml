@@ -1,0 +1,22 @@
+# ==============================================================================
+# MONGODB PERSISTENT VOLUME CLAIM (CKA STORAGE DOMAIN)
+# ==============================================================================
+# - Requests 5Gi of persistent block storage.
+# - AccessMode 'ReadWriteOnce' ensures single-node mount integrity.
+# ==============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-pvc
+  namespace: todo-app
+  labels:
+    app: mongodb
+    app.kubernetes.io/name: mongodb-pvc
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: todo-app
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

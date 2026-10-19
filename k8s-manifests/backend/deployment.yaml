@@ -1,0 +1,162 @@
+# ==============================================================================
+# BACKEND DEPLOYMENT (CKA / CKAD PRODUCTION PATTERN)
+# ==============================================================================
+# Core CKA Competencies demonstrated:
+# 1. Zero-Downtime Rolling Update Strategy (maxSurge=1, maxUnavailable=0)
+# 2. Pod Anti-Affinity & Topology Spread (avoids single point of failure)
+# 3. Pod & Container SecurityContext (non-root, drop capabilities, seccomp)
+# 4. Tri-Probe Health Architecture: startupProbe + livenessProbe + readinessProbe
+# 5. Graceful Pod Lifecycle Shutdown (preStop hook + terminationGracePeriodSeconds)
+# 6. Predictable Quality of Service (QoS: Burstable via requests/limits)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todo-backend
+  namespace: todo-app
+  labels:
+    app: todo-backend
+    app.kubernetes.io/name: todo-backend
+    app.kubernetes.io/instance: todo-backend-production
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: todo-app
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  replicas: 2
+
+  # [CKA PATTERN: Rolling Update Strategy]
+  # Guarantees zero downtime by provisioning 1 new replica before terminating any old one.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  selector:
+    matchLabels:
+      app: todo-backend
+
+  template:
+    metadata:
+      labels:
+        app: todo-backend
+        app.kubernetes.io/name: todo-backend
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: todo-app
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "5000"
+
+    spec:
+      # [CKA PATTERN: Pod-Level Security Context]
+      # Run as an unprivileged UID/GID with modern Linux seccomp profile
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+
+      # [CKA PATTERN: Graceful Termination]
+      # Gives Node.js process 30 seconds to flush connections before receiving SIGKILL
+      terminationGracePeriodSeconds: 30
+
+      # [CKA PATTERN: High Availability Pod Anti-Affinity]
+      # Soft rule to schedule backend replicas across different physical worker nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - todo-backend
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: backend
+          image: todo-backend:latest
+          imagePullPolicy: IfNotPresent
+
+          # [CKA PATTERN: Container-Level Security Hardening]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+
+          ports:
+            - name: http
+              containerPort: 5000
+              protocol: TCP
+
+          # [CKA PATTERN: Environment Variables via ConfigMap & Secret references]
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secret
+
+          # [CKA PATTERN: Resource Management (QoS: Burstable)]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+
+          # [CKA PATTERN: Startup Probe]
+          # Protects slow cold starts (e.g. database connection handshake) from premature restarts
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 20 # Allows up to 100 seconds to fully boot
+
+          # [CKA PATTERN: Liveness Probe]
+          # Restarts the container if process deadlocks or hangs
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          # [CKA PATTERN: Readiness Probe]
+          # Removes pod from Service endpoints so users don't receive 502/504 errors
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 2
+
+          # [CKA PATTERN: Lifecycle PreStop Hook]
+          # Pauses for 5 seconds upon receiving termination signal to allow kube-proxy
+          # to cleanly withdraw the pod IP from service endpoints
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
+
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+
+      volumes:
+        # Writable scratch space for Node.js /tmp files
+        - name: tmp-volume
+          emptyDir: {}

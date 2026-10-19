@@ -1,0 +1,25 @@
+# ==============================================================================
+# BACKEND SERVICE (CKA SERVICE DISCOVERY PATTERN)
+# ==============================================================================
+# - Internal ClusterIP service exposing the Node.js backend to internal clients.
+# - Uses named ports ('http') for decoupling port numbers from container configs.
+# ==============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: todo-backend
+  namespace: todo-app
+  labels:
+    app: todo-backend
+    app.kubernetes.io/name: todo-backend
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: todo-app
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 5000
+      targetPort: http # References container named port 'http'
+      protocol: TCP
+  selector:
+    app: todo-backend

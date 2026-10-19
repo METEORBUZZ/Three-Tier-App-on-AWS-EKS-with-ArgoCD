@@ -1,0 +1,62 @@
+# ==============================================================================
+# INGRESS CONFIGURATION (CKA INGRESS & TRAFFIC ROUTING PATTERN)
+# ==============================================================================
+# Core CKA Competencies demonstrated:
+# 1. Modern 'ingressClassName' specification (replaces deprecated annotations)
+# 2. Path routing with precise 'Prefix' and 'Exact' pathTypes
+# 3. Separation of API endpoints (/api, /health, /metrics) from frontend UI (/)
+# ==============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: todo-ingress
+  namespace: todo-app
+  labels:
+    app.kubernetes.io/name: todo-ingress
+    app.kubernetes.io/part-of: todo-app
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # AWS ALB Ingress annotations (uncomment if using AWS Load Balancer Controller):
+    # alb.ingress.kubernetes.io/scheme: internet-facing
+    # alb.ingress.kubernetes.io/target-type: ip
+spec:
+  ingressClassName: nginx # Modern Kubernetes standard (CKA requirement)
+  rules:
+    - http:
+        paths:
+          # Backend API routes
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: todo-backend
+                port:
+                  number: 5000
+
+          # Backend Health Probe
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: todo-backend
+                port:
+                  number: 5000
+
+          # Prometheus Metrics Scraping endpoint
+          - path: /metrics
+            pathType: Exact
+            backend:
+              service:
+                name: todo-backend
+                port:
+                  number: 5000
+
+          # Frontend Web Application UI
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: todo-frontend
+                port:
+                  number: 80

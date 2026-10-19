@@ -1,0 +1,42 @@
+# ==============================================================================
+# NETWORK POLICY: FRONTEND INGRESS ALLOW (CKA NETWORKING DOMAIN)
+# ==============================================================================
+# Allows HTTP ingress traffic to frontend pods on port 80 from anywhere
+# (including Ingress Controller) and allows egress for cluster DNS.
+# ==============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-network-policy
+  namespace: todo-app
+  labels:
+    app.kubernetes.io/name: frontend-network-policy
+    app.kubernetes.io/part-of: todo-app
+spec:
+  podSelector:
+    matchLabels:
+      app: todo-frontend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow incoming HTTP traffic from any client / Ingress controller
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 80
+  egress:
+    # Allow DNS queries to CoreDNS (port 53 UDP & TCP)
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow communication to Backend API
+    - to:
+        - podSelector:
+            matchLabels:
+              app: todo-backend
+      ports:
+        - protocol: TCP
+          port: 5000

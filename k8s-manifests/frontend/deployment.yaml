@@ -1,0 +1,149 @@
+# ==============================================================================
+# FRONTEND DEPLOYMENT (CKA / CKAD PRODUCTION PATTERN)
+# ==============================================================================
+# Core CKA Competencies demonstrated:
+# 1. Zero-Downtime Rolling Update Strategy (maxSurge=1, maxUnavailable=0)
+# 2. Pod Anti-Affinity (spreads Nginx frontend pods across distinct nodes)
+# 3. Pod & Container SecurityContext (non-root, seccomp, drop all capabilities)
+# 4. Probes Architecture: startupProbe + livenessProbe + readinessProbe
+# 5. Dedicated emptyDir scratch spaces for Nginx caching and PID files
+# 6. Quality of Service (QoS: Burstable via explicit requests/limits)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todo-frontend
+  namespace: todo-app
+  labels:
+    app: todo-frontend
+    app.kubernetes.io/name: todo-frontend
+    app.kubernetes.io/instance: todo-frontend-production
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: todo-app
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  replicas: 2
+
+  # [CKA PATTERN: Rolling Update Strategy]
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  selector:
+    matchLabels:
+      app: todo-frontend
+
+  template:
+    metadata:
+      labels:
+        app: todo-frontend
+        app.kubernetes.io/name: todo-frontend
+        app.kubernetes.io/component: frontend
+        app.kubernetes.io/part-of: todo-app
+
+    spec:
+      # [CKA PATTERN: Pod-Level Security Context]
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101 # Standard unprivileged nginx user UID
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+
+      terminationGracePeriodSeconds: 30
+
+      # [CKA PATTERN: High Availability Pod Anti-Affinity]
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - todo-frontend
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: frontend
+          image: todo-frontend:latest
+          imagePullPolicy: IfNotPresent
+
+          # [CKA PATTERN: Container-Level Security Hardening]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+
+          # [CKA PATTERN: Resource Management]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+
+          # [CKA PATTERN: Startup Probe]
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 10
+
+          # [CKA PATTERN: Liveness Probe]
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          # [CKA PATTERN: Readiness Probe]
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 80
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 2
+
+          # [CKA PATTERN: Graceful Termination Hook]
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5 && nginx -s quit"]
+
+          volumeMounts:
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+            - name: tmp-volume
+              mountPath: /tmp
+
+      volumes:
+        # Writable scratch spaces required for unprivileged Nginx operation
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+        - name: tmp-volume
+          emptyDir: {}

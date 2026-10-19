@@ -1,0 +1,126 @@
+# ==============================================================================
+# MONGODB DATABASE WORKLOAD (CKA STATEFUL APPLICATION PATTERN)
+# ==============================================================================
+# Core CKA Competencies demonstrated:
+# 1. Strategy 'Recreate': Prevents concurrent write conflicts on ReadWriteOnce PVC
+# 2. Strict Pod & Container SecurityContext (runs as unprivileged mongodb UID 999)
+# 3. Tri-Probe Health Architecture: startupProbe + livenessProbe + readinessProbe
+# 4. Predictable QoS with CPU/Memory bounds
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+  namespace: todo-app
+  labels:
+    app: mongodb
+    app.kubernetes.io/name: mongodb
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: todo-app
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  replicas: 1
+
+  # [CKA PATTERN: Recreate Strategy for Stateful Single-Instance Volumes]
+  # Guarantees old pod is completely terminated and volume unmounted before
+  # new pod attempts to attach the EBS volume.
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: mongodb
+
+  template:
+    metadata:
+      labels:
+        app: mongodb
+        app.kubernetes.io/name: mongodb
+        app.kubernetes.io/component: database
+        app.kubernetes.io/part-of: todo-app
+
+    spec:
+      # [CKA PATTERN: Non-Root Security Context for Official MongoDB Image]
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999 # Official MongoDB unprivileged user UID
+        runAsGroup: 999
+        fsGroup: 999 # Ensures attached EBS volume permissions match MongoDB user
+        seccompProfile:
+          type: RuntimeDefault
+
+      terminationGracePeriodSeconds: 60 # Allows MongoDB to flush journals to disk cleanly
+
+      containers:
+        - name: mongodb
+          image: mongo:7.0
+          imagePullPolicy: IfNotPresent
+
+          # [CKA PATTERN: Container Privilege Restriction]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+
+          ports:
+            - name: mongodb
+              containerPort: 27017
+              protocol: TCP
+
+          # [CKA PATTERN: Resource Bounds (QoS: Burstable)]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          # [CKA PATTERN: Startup Probe]
+          # Allows MongoDB time to rebuild indexes and initialize storage engine
+          startupProbe:
+            exec:
+              command:
+                - mongosh
+                - --eval
+                - "db.adminCommand('ping')"
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 20
+
+          # [CKA PATTERN: Liveness Probe]
+          livenessProbe:
+            exec:
+              command:
+                - mongosh
+                - --eval
+                - "db.adminCommand('ping')"
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          # [CKA PATTERN: Readiness Probe]
+          readinessProbe:
+            exec:
+              command:
+                - mongosh
+                - --eval
+                - "db.adminCommand('ping')"
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 2
+
+          volumeMounts:
+            - name: mongodb-data
+              mountPath: /data/db
+            - name: tmp-volume
+              mountPath: /tmp
+
+      volumes:
+        - name: mongodb-data
+          persistentVolumeClaim:
+            claimName: mongodb-pvc
+        - name: tmp-volume
+          emptyDir: {}
