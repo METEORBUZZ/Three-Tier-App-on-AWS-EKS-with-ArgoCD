@@ -106,23 +106,27 @@ jobs:
 
       - name: Determine Target Container Registry
         id: prep
+        uses: actions/github-script@v7
         env:
           DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME }}
           DOCKER_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          REPO_OWNER: ${{ github.repository_owner }}
-        run: |
-          if [ -n "$DOCKER_USER" ] && [ -n "$DOCKER_TOKEN" ]; then
-            echo "Using Docker Hub registry..."
-            echo "backend_image=${DOCKER_USER}/todo-backend" >> "$GITHUB_OUTPUT"
-            echo "frontend_image=${DOCKER_USER}/todo-frontend" >> "$GITHUB_OUTPUT"
-            echo "use_dockerhub=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Docker Hub secrets not configured. Falling back to GitHub Container Registry (ghcr.io)..."
-            LOW_OWNER=$(echo "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
-            echo "backend_image=ghcr.io/${LOW_OWNER}/todo-backend" >> "$GITHUB_OUTPUT"
-            echo "frontend_image=ghcr.io/${LOW_OWNER}/todo-frontend" >> "$GITHUB_OUTPUT"
-            echo "use_dockerhub=false" >> "$GITHUB_OUTPUT"
-          fi
+        with:
+          script: |
+            const dockerUser = (process.env.DOCKER_USER || '').trim();
+            const dockerToken = (process.env.DOCKER_TOKEN || '').trim();
+            const repoOwner = (context.repo.owner || '').toLowerCase();
+
+            if (dockerUser && dockerToken) {
+              core.info(`Using Docker Hub registry for user: ${dockerUser}`);
+              core.setOutput('backend_image', `${dockerUser}/todo-backend`);
+              core.setOutput('frontend_image', `${dockerUser}/todo-frontend`);
+              core.setOutput('use_dockerhub', 'true');
+            } else {
+              core.info(`Docker Hub secrets not set. Falling back to ghcr.io/${repoOwner}`);
+              core.setOutput('backend_image', `ghcr.io/${repoOwner}/todo-backend`);
+              core.setOutput('frontend_image', `ghcr.io/${repoOwner}/todo-frontend`);
+              core.setOutput('use_dockerhub', 'false');
+            }
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
