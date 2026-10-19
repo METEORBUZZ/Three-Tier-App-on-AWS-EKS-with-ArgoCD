@@ -4,7 +4,7 @@ FROM node:20-alpine AS dependencies
 WORKDIR /usr/src/app
 
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+RUN npm install --only=production && npm cache clean --force
 
 FROM node:20-alpine
 
