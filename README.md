@@ -60,14 +60,11 @@ todo-app/
 │   ├── nginx.conf               # SPA routing & caching
 │   ├── package.json
 │   └── src/                     # Components, API client, styles
-├── terraform/                   # AWS Infrastructure as Code (Multi-stage EKS + VPC)
-│   ├── modules/                 # Reusable VPC & EKS Terraform modules
-│   │   ├── vpc/
-│   │   └── eks/
-│   ├── environments/            # Stage configurations (dev, stage, prod)
-│   │   ├── dev/
-│   │   ├── stage/
-│   │   └── prod/
+├── terraform/                   # AWS Infrastructure as Code (3-Stage EKS + VPC)
+│   ├── dev/                     # Stage 1: Development (VPC + EKS)
+│   ├── stage/                   # Stage 2: Staging (VPC + EKS)
+│   ├── prod/                    # Stage 3: Production (Multi-AZ VPC + EKS)
+│   ├── modules/                 # Reusable VPC & EKS blueprints
 │   └── README.md
 ├── k8s-manifests/               # Kubernetes Manifests (CKA & Production Grade)
 │   ├── namespace.yaml           # Namespace with Pod Security Standards (PSA)
@@ -175,9 +172,8 @@ npm run build
 ### 1. Provision Infrastructure with Terraform (Dev, Stage, Prod)
 Choose the stage to provision (`dev`, `stage`, or `prod`):
 ```bash
-# Example: Deploy Development Environment
-cd terraform/environments/dev
-# or: cd terraform/dev
+cd terraform/dev
+# or: cd terraform/stage, cd terraform/prod
 
 terraform init
 terraform plan

@@ -1,42 +1,64 @@
 # ==============================================================================
-# DEV ENVIRONMENT: MAIN ORCHESTRATION BLUEPRINT
+# PROD STAGE: MAIN INFRASTRUCTURE
 # ==============================================================================
-# In simple terms:
-# This file assembles our infrastructure like LEGO blocks by calling our two
-# reusable modules:
-#   1. module "vpc": Builds the Dev network (VPC, subnets, gateways).
-#   2. module "eks": Builds the Dev Kubernetes cluster inside that network.
+# Sets up AWS Provider and builds Prod VPC (Multi-AZ) and EKS Cluster.
 # ==============================================================================
 
+terraform {
+  required_version = ">= 1.5.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+
+  # (Optional) Remote S3 Backend for teams:
+  # backend "s3" {
+  #   bucket         = "todo-terraform-state-bucket"
+  #   key            = "todo-app/prod/terraform.tfstate"
+  #   region         = "us-east-1"
+  #   dynamodb_table = "terraform-locks"
+  # }
+}
+
+provider "aws" {
+  region = var.aws_region
+
+  default_tags {
+    tags = {
+      Project     = "TodoApp"
+      Environment = var.environment
+      ManagedBy   = "Terraform"
+    }
+  }
+}
+
 # ------------------------------------------------------------------------------
-# BLOCK 1: Build the Dev Network (VPC)
+# 1. Prod Network (VPC with Multi-AZ NAT Gateways)
 # ------------------------------------------------------------------------------
 module "vpc" {
-  source = "../../modules/vpc" # Use the shared VPC blueprint
+  source = "../modules/vpc"
 
   environment        = var.environment
   cluster_name       = var.cluster_name
   vpc_cidr           = var.vpc_cidr
-  single_nat_gateway = var.single_nat_gateway
+  single_nat_gateway = var.single_nat_gateway # false -> creates 2 redundant gateways
 }
 
 # ------------------------------------------------------------------------------
-# BLOCK 2: Build the Dev Kubernetes Cluster (EKS)
+# 2. Prod Kubernetes Cluster (EKS)
 # ------------------------------------------------------------------------------
 module "eks" {
-  source = "../../modules/eks" # Use the shared EKS blueprint
+  source = "../modules/eks"
 
   environment        = var.environment
   cluster_name       = var.cluster_name
   kubernetes_version = var.kubernetes_version
 
-  # Place the management control plane across all subnets
-  subnet_ids = concat(module.vpc.public_subnet_ids, module.vpc.private_subnet_ids)
-
-  # Place our worker computers safely inside the private subnets
+  subnet_ids      = concat(module.vpc.public_subnet_ids, module.vpc.private_subnet_ids)
   node_subnet_ids = module.vpc.private_subnet_ids
 
-  # Scaling and hardware settings for Dev
   node_instance_types = var.node_instance_types
   desired_node_count  = var.desired_node_count
   min_node_count      = var.min_node_count

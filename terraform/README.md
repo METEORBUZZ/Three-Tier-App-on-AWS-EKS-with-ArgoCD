@@ -26,40 +26,31 @@ If you are new to cloud infrastructure, here is what each piece actually does us
 
 ```text
 terraform/
-├── modules/
-│   ├── vpc/                     # Reusable AWS VPC module
-│   │   ├── main.tf              # VPC, IGW, Public/Private Subnets, NAT GW, Route Tables
-│   │   ├── variables.tf         # Module inputs
-│   │   └── outputs.tf           # Module outputs (vpc_id, subnet_ids)
-│   └── eks/                     # Reusable AWS EKS module
-│       ├── main.tf              # IAM roles, EKS cluster, managed node group
-│       ├── variables.tf         # Module inputs (version, node types, scaling config)
-│       └── outputs.tf           # Cluster outputs (endpoint, CA data, cluster_name)
-├── environments/
-│   ├── dev/                     # Development environment
-│   │   ├── main.tf              # Module instantiations
-│   │   ├── variables.tf         # Environment variables & defaults
-│   │   ├── terraform.tfvars     # Environment values
-│   │   ├── provider.tf          # AWS provider & default tags
-│   │   ├── backend.tf           # Remote state backend configuration
-│   │   └── outputs.tf           # Environment outputs & kubeconfig helper
-│   ├── stage/                   # Staging / Pre-prod environment
+├── dev/                         # Stage 1: Development
+│   ├── main.tf                  # AWS Provider + VPC & EKS modules
+│   ├── variables.tf             # Input variables
+│   ├── terraform.tfvars         # Dev environment values
+│   └── outputs.tf               # Cluster endpoints & kubeconfig output
+├── stage/                       # Stage 2: Staging / Pre-prod
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── terraform.tfvars
+│   └── outputs.tf
+├── prod/                        # Stage 3: Production
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── terraform.tfvars
+│   └── outputs.tf
+├── modules/                     # Reusable Core Blueprints
+│   ├── vpc/                     # AWS VPC, Subnets, Gateways, Route Tables
 │   │   ├── main.tf
 │   │   ├── variables.tf
-│   │   ├── terraform.tfvars
-│   │   ├── provider.tf
-│   │   ├── backend.tf
 │   │   └── outputs.tf
-│   └── prod/                    # Production environment
+│   └── eks/                     # AWS EKS Cluster, IAM roles, Node Groups
 │       ├── main.tf
 │       ├── variables.tf
-│       ├── terraform.tfvars
-│       ├── provider.tf
-│       ├── backend.tf
 │       └── outputs.tf
-├── dev  -> environments/dev     # Convenience symlink
-├── stage -> environments/stage  # Convenience symlink
-└── prod -> environments/prod    # Convenience symlink
+└── README.md                    # Setup & architecture guide
 ```
 
 ---
@@ -91,9 +82,8 @@ terraform/
 Navigate to the target environment directory:
 
 ```bash
-cd terraform/environments/dev
-# or using the shortcut:
-# cd terraform/dev
+cd terraform/dev
+# or: cd terraform/stage, cd terraform/prod
 ```
 
 Initialize Terraform:
