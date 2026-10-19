@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   # ----------------------------------------------------------------------------
@@ -89,16 +90,35 @@ jobs:
           exit-code: '0' # Non-blocking for CI flow, records security insights
 
   # ----------------------------------------------------------------------------
-  # 4. DOCKER BUILD & PUSH (Docker Hub)
+  # 4. DOCKER BUILD & PUSH (Docker Hub or GitHub Container Registry Fallback)
   # ----------------------------------------------------------------------------
   docker-build-push:
     name: Build & Push Docker Images
     needs: [backend-ci, frontend-ci, security-scan]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]')
     runs-on: ubuntu-latest
+    outputs:
+      backend_image: ${{ steps.prep.outputs.backend_image }}
+      frontend_image: ${{ steps.prep.outputs.frontend_image }}
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
+
+      - name: Determine Target Container Registry
+        id: prep
+        run: |
+          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "Using Docker Hub registry..."
+            echo "backend_image=${{ secrets.DOCKERHUB_USERNAME }}/todo-backend" >> $GITHUB_OUTPUT
+            echo "frontend_image=${{ secrets.DOCKERHUB_USERNAME }}/todo-frontend" >> $GITHUB_OUTPUT
+            echo "use_dockerhub=true" >> $GITHUB_OUTPUT
+          else
+            echo "Docker Hub secrets not configured. Falling back to GitHub Container Registry (ghcr.io)..."
+            OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+            echo "backend_image=ghcr.io/${OWNER}/todo-backend" >> $GITHUB_OUTPUT
+            echo "frontend_image=ghcr.io/${OWNER}/todo-frontend" >> $GITHUB_OUTPUT
+            echo "use_dockerhub=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -106,11 +126,22 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Login to Docker Hub if credentials are provided
       - name: Log in to Docker Hub
+        if: steps.prep.outputs.use_dockerhub == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Automatic fallback: Login to GitHub Container Registry using built-in token
+      - name: Log in to GitHub Container Registry (ghcr.io)
+        if: steps.prep.outputs.use_dockerhub == 'false'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & Push Backend Docker Image
         uses: docker/build-push-action@v5
@@ -118,8 +149,8 @@ jobs:
           context: ./backend
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/todo-backend:${{ github.sha }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/todo-backend:latest
+            ${{ steps.prep.outputs.backend_image }}:${{ github.sha }}
+            ${{ steps.prep.outputs.backend_image }}:latest
 
       - name: Build & Push Frontend Docker Image
         uses: docker/build-push-action@v5
@@ -127,8 +158,8 @@ jobs:
           context: ./frontend
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/todo-frontend:${{ github.sha }}
-            ${{ secrets.DOCKERHUB_USERNAME }}/todo-frontend:latest
+            ${{ steps.prep.outputs.frontend_image }}:${{ github.sha }}
+            ${{ steps.prep.outputs.frontend_image }}:latest
 
   # ----------------------------------------------------------------------------
   # 5. GITOPS MANIFEST UPDATE (Bridge to ArgoCD)
@@ -152,8 +183,8 @@ jobs:
       - name: Update Image Tags in Kustomize
         run: |
           cd k8s-manifests
-          kustomize edit set image todo-backend=${{ secrets.DOCKERHUB_USERNAME }}/todo-backend:${{ github.sha }}
-          kustomize edit set image todo-frontend=${{ secrets.DOCKERHUB_USERNAME }}/todo-frontend:${{ github.sha }}
+          kustomize edit set image todo-backend=${{ needs.docker-build-push.outputs.backend_image }}:${{ github.sha }}
+          kustomize edit set image todo-frontend=${{ needs.docker-build-push.outputs.frontend_image }}:${{ github.sha }}
 
       - name: Commit & Push Updated GitOps Manifests
         run: |
