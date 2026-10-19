@@ -106,18 +106,22 @@ jobs:
 
       - name: Determine Target Container Registry
         id: prep
+        env:
+          DOCKER_USER: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKER_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          REPO_OWNER: ${{ github.repository_owner }}
         run: |
-          if [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] && [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+          if [ -n "$DOCKER_USER" ] && [ -n "$DOCKER_TOKEN" ]; then
             echo "Using Docker Hub registry..."
-            echo "backend_image=${{ secrets.DOCKERHUB_USERNAME }}/todo-backend" >> $GITHUB_OUTPUT
-            echo "frontend_image=${{ secrets.DOCKERHUB_USERNAME }}/todo-frontend" >> $GITHUB_OUTPUT
-            echo "use_dockerhub=true" >> $GITHUB_OUTPUT
+            echo "backend_image=${DOCKER_USER}/todo-backend" >> "$GITHUB_OUTPUT"
+            echo "frontend_image=${DOCKER_USER}/todo-frontend" >> "$GITHUB_OUTPUT"
+            echo "use_dockerhub=true" >> "$GITHUB_OUTPUT"
           else
             echo "Docker Hub secrets not configured. Falling back to GitHub Container Registry (ghcr.io)..."
-            OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-            echo "backend_image=ghcr.io/${OWNER}/todo-backend" >> $GITHUB_OUTPUT
-            echo "frontend_image=ghcr.io/${OWNER}/todo-frontend" >> $GITHUB_OUTPUT
-            echo "use_dockerhub=false" >> $GITHUB_OUTPUT
+            LOW_OWNER=$(echo "$REPO_OWNER" | tr '[:upper:]' '[:lower:]')
+            echo "backend_image=ghcr.io/${LOW_OWNER}/todo-backend" >> "$GITHUB_OUTPUT"
+            echo "frontend_image=ghcr.io/${LOW_OWNER}/todo-frontend" >> "$GITHUB_OUTPUT"
+            echo "use_dockerhub=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Set up QEMU
