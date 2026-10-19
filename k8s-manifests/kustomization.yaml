@@ -46,3 +46,13 @@ labels:
   - pairs:
       app.kubernetes.io/part-of: todo-app
       app.kubernetes.io/managed-by: gitops
+
+# [GITOPS IMAGE TRACKING]
+# Updated automatically by GitHub Actions CI when new container images are built
+images:
+  - name: todo-backend
+    newName: todo-backend
+    newTag: latest
+  - name: todo-frontend
+    newName: todo-frontend
+    newTag: latest

@@ -1,0 +1,51 @@
+# ==============================================================================
+# ARGOCD APPLICATION DEFINITION (GITOPS CD)
+# ==============================================================================
+# In simple terms:
+# This manifest tells ArgoCD:
+#   1. WHICH Git repository to watch (Three-Tier-App-on-AWS-EKS-with-ArgoCD).
+#   2. WHICH folder contains our Kubernetes files (k8s-manifests).
+#   3. WHERE to deploy it (our Kubernetes cluster inside namespace 'todo-app').
+#   4. HOW to sync (Automatically! Whenever GitHub Actions pushes a new image tag).
+# ==============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: todo-app
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: todo-app
+    app.kubernetes.io/part-of: todo-app
+  finalizers:
+    # Ensures dependent Kubernetes resources are cleaned up if this app is deleted in ArgoCD
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  # 1. Source Repository (Git Source of Truth)
+  source:
+    repoURL: https://github.com/METEORBUZZ/Three-Tier-App-on-AWS-EKS-with-ArgoCD.git
+    targetRevision: HEAD
+    path: k8s-manifests
+
+  # 2. Destination Cluster & Namespace
+  destination:
+    server: https://kubernetes.default.svc # Internal EKS API server
+    namespace: todo-app
+
+  # 3. Automated GitOps Sync Policy
+  syncPolicy:
+    automated:
+      prune: true      # Automatically deletes resources in K8s if removed from Git
+      selfHeal: true   # Automatically reverts unauthorized manual changes made with kubectl
+    syncOptions:
+      - CreateNamespace=true      # Creates todo-app namespace if it does not exist
+      - ApplyOutOfSyncOnly=true   # Optimizes performance by applying only changed resources
+      - PruneLast=true            # Deletes obsolete resources at the end of rollout
+
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

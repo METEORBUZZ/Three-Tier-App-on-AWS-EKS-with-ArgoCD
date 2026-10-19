@@ -75,9 +75,12 @@ todo-app/
 │   ├── backend/                 # ConfigMap, Secret, Deployment, Service, HPA, PDB
 │   ├── frontend/                # Deployment, Service, HPA, PDB
 │   └── README.md                # CKA architecture & best practices guide
-├── jenkins/                     # CI/CD Automation
-│   ├── Jenkinsfile              # Declarative CI/CD pipeline
-│   └── README.md                # Jenkins setup instructions
+├── .github/workflows/          # CI Automation (GitHub Actions)
+│   └── ci.yml                   # Build, Test, Security Scan, Push & GitOps tag update
+├── argocd/                      # CD Automation (ArgoCD GitOps)
+│   ├── application.yaml         # ArgoCD Application definition (Auto-Sync)
+│   ├── install-argocd.sh        # Automated ArgoCD setup script
+│   └── README.md                # GitOps continuous delivery guide
 └── monitoring/                  # Prometheus & Grafana Observability
     ├── servicemonitor.yaml      # Prometheus Operator ServiceMonitor
     ├── prometheus-rules.yaml    # Alert rules (Down, 5xx rate, High latency)
@@ -202,10 +205,19 @@ kubectl rollout status deployment/todo-backend -n todo-app
 kubectl rollout status deployment/todo-frontend -n todo-app
 ```
 
-### 3. Setup CI/CD with Jenkins
-1. Open Jenkins and install required plugins (`docker-workflow`, `nodejs`, `credentials-binding`, `pipeline-aws`).
-2. Add credentials `docker-hub-credentials` and `aws-eks-credentials`.
-3. Create a Pipeline project pointing to the repository's `jenkins/Jenkinsfile`.
+### 3. Setup CI/CD with GitHub Actions & ArgoCD
+1. **GitHub Actions (CI):**
+   - Add your Docker Hub credentials in GitHub repo settings (**Settings > Secrets and variables > Actions**):
+     - `DOCKERHUB_USERNAME`: your Docker Hub username
+     - `DOCKERHUB_TOKEN`: your Docker Hub Personal Access Token
+   - On every push to `main`, `.github/workflows/ci.yml` tests backend & frontend, runs Trivy security scans, builds Docker images, and automatically updates image tags in `k8s-manifests/kustomization.yaml`.
+
+2. **ArgoCD (CD):**
+   - Install ArgoCD and register the GitOps application:
+     ```bash
+     ./argocd/install-argocd.sh
+     ```
+   - ArgoCD automatically detects updated manifests pushed to Git and synchronizes new deployments to the EKS cluster with zero downtime!
 
 ### 4. Deploy Monitoring (Prometheus & Grafana)
 ```bash
