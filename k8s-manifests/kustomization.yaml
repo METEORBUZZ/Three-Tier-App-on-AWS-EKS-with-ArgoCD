@@ -9,50 +9,48 @@ kind: Kustomization
 
 namespace: todo-app
 
-resources:
   # 1. Namespace & Pod Security Admission
-  - namespace.yaml
 
   # 2. Network Policies (Zero-Trust Network Isolation)
-  - networkpolicies/default-deny.yaml
-  - networkpolicies/frontend-netpol.yaml
-  - networkpolicies/backend-netpol.yaml
-  - networkpolicies/mongodb-netpol.yaml
 
   # 3. Database Layer (MongoDB)
-  - mongodb/pvc.yaml
-  - mongodb/deployment.yaml
-  - mongodb/service.yaml
 
   # 4. Backend Application Layer (Node.js API)
-  - backend/configmap.yaml
-  - backend/secret.yaml
-  - backend/deployment.yaml
-  - backend/service.yaml
-  - backend/hpa.yaml
-  - backend/pdb.yaml
 
   # 5. Frontend Application Layer (React + Nginx)
-  - frontend/deployment.yaml
-  - frontend/service.yaml
-  - frontend/hpa.yaml
-  - frontend/pdb.yaml
 
   # 6. Ingress Routing Layer
-  - ingress.yaml
+resources:
+- namespace.yaml
+- networkpolicies/default-deny.yaml
+- networkpolicies/frontend-netpol.yaml
+- networkpolicies/backend-netpol.yaml
+- networkpolicies/mongodb-netpol.yaml
+- mongodb/pvc.yaml
+- mongodb/deployment.yaml
+- mongodb/service.yaml
+- backend/configmap.yaml
+- backend/secret.yaml
+- backend/deployment.yaml
+- backend/service.yaml
+- backend/hpa.yaml
+- backend/pdb.yaml
+- frontend/deployment.yaml
+- frontend/service.yaml
+- frontend/hpa.yaml
+- frontend/pdb.yaml
+- ingress.yaml
 
 # Common Labels applied across all managed resources (Kustomize v5 standard)
 labels:
-  - pairs:
-      app.kubernetes.io/part-of: todo-app
-      app.kubernetes.io/managed-by: gitops
+- pairs:
+    app.kubernetes.io/managed-by: gitops
+    app.kubernetes.io/part-of: todo-app
 
 # [GITOPS IMAGE TRACKING]
 # Updated automatically by GitHub Actions CI when new container images are built
 images:
-  - name: todo-backend
-    newName: todo-backend
-    newTag: latest
-  - name: todo-frontend
-    newName: todo-frontend
-    newTag: latest
+- name: todo-backend
+  newTag: cd97a55b57f9060e7caffafbe233df115610a5de
+- name: todo-frontend
+  newTag: cd97a55b57f9060e7caffafbe233df115610a5de
